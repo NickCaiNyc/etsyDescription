@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Images with ChatGPT</title>
+</head>
+<body>
+  <h1>Upload Images with ChatGPT</h1>
+  <form id="uploadForm">
+    <input type="file" id="imageInput" name="images" accept="image/*" multiple required>
+    <input type="text" id="userInput" name="userInput" placeholder="Enter additional description">
+    <button type="submit">Upload</button>
+    <button type="button" id="clearButton">Clear</button>
+  </form>
+  <pre id="output"></pre>
+  <h2>Generated Description</h2>
+  <div id="generatedDescription"></div>
+
+   <h2>Folders</h2>
+  <div id="folderList"></div>
+
+
+  <script>
+    
+    document.getElementById('clearButton').addEventListener('click', () => {
+      document.getElementById('imageInput').value = '';
+      document.getElementById('userInput').value = '';
+      document.getElementById('output').textContent = '';
+      document.getElementById('generatedDescription').textContent = '';
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const fileInput = document.getElementById('imageInput');
+        const files = fileInput.files;
+
+        if (!files || files.length === 0) {
+          alert("Please select at least one file.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('folderName', `group-${Date.now()}`);
+        for (const file of files) {
+          formData.append('images', file); // Field name must match the backend
+        }
+
+        try {
+          const response = await fetch('http://localhost:3000/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+          if (response.ok) {
+            document.getElementById('output').textContent = `Upload successful! URLs: ${result.urls.join(', ')}`;
+            // Refresh folder content after upload
+            fetchDatabaseContent();
+          } else {
+            document.getElementById('output').textContent = `Upload failed: ${result.message}`;
+          }
+        } catch (error) {
+          console.error("Error uploading files:", error);
+          document.getElementById('output').textContent = "Error uploading files.";
+        }
+      });
+
+
+      async function fetchDatabaseContent() {
+  try {
+    const response = await fetch('http://localhost:3000/database-content');
+    const data = await response.json();
+
+    if (response.ok) {
+      const folderList = document.getElementById('folderList');
+      folderList.innerHTML = '';
+
+      for (const folderName in data) {
+        const folderDiv = document.createElement('div');
+        const folderTitle = document.createElement('h3');
+        folderTitle.textContent = folderName;
+        folderDiv.appendChild(folderTitle);
+
+        const fileList = document.createElement('div');
+        let descriptionText = ''; // Initialize description content
+
+        for (const fileUrl of data[folderName]) {
+          if (fileUrl.includes('description.txt')) {
+            // Fetch and display the description dynamically
+            try {
+              console.log(`Fetching description from URL: ${fileUrl}`);
+              const descriptionResponse = await fetch(fileUrl);
+              if (!descriptionResponse.ok) throw new Error(`HTTP Error: ${descriptionResponse.status}`);
+              descriptionText = await descriptionResponse.text();
+            } catch (err) {
+              console.error(`Error fetching description for ${folderName}:`, err);
+              descriptionText = 'Error fetching description.';
+            }
+          } else {
+            // Display image files
+            const img = document.createElement('img');
+            img.src = fileUrl;
+            img.alt = folderName;
+            img.style.width = '150px';
+            img.style.margin = '5px';
+            fileList.appendChild(img);
+          }
+        }
+
+        const descriptionDiv = document.createElement('div');
+        descriptionDiv.style.marginTop = '10px';
+        descriptionDiv.style.border = '1px solid #ccc'; // Optional styling
+        descriptionDiv.style.padding = '10px';
+        descriptionDiv.style.borderRadius = '5px';
+        descriptionDiv.style.backgroundColor = '#f9f9f9';
+
+        // Set HTML content directly
+        if (descriptionText) {
+          descriptionDiv.innerHTML = descriptionText; // Render the HTML as structured content
+        } else {
+          // Fallback for empty description
+          descriptionDiv.textContent = 'Description: No description available.';
+        }
+
+        // Append the description to the file list
+        fileList.appendChild(descriptionDiv);
+
+        folderDiv.appendChild(fileList);
+        folderList.appendChild(folderDiv);
+      }
+    } else {
+      console.error('Error fetching database content:', data.message);
+      document.getElementById('folderList').textContent = 'Failed to fetch database content.';
+    }
+  } catch (error) {
+    console.error('Error fetching database content:', error);
+    document.getElementById('folderList').textContent = 'Error fetching database content.';
+  }
+}
+
+
+
+
+// Call the function on page load
+document.addEventListener('DOMContentLoaded', () => {
+  fetchDatabaseContent();
+});
+
+  </script>
+</body>
+</html>
